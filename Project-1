@@ -1,0 +1,500 @@
+import numpy as np
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+mc = pd.read_csv("mcdonalds.csv")
+mc.head()
+mc.columns
+mc.shape
+mc.head(3)
+mc_x = pd.DataFrame(mc.iloc[:,:11])
+mc_x = (mc_x == "Yes").astype(int)
+mc_y = pd.Series(mc_x.mean(axis=0)).round(2)
+mc_y
+from sklearn.decomposition import PCA
+pca = PCA()
+exp_variance = pca.explained_variance_ratio_
+
+print("Explained Variance Ratio:")
+print(exp_variance)
+
+cum_exp_variance = pca.explained_variance_ratio_.cumsum()
+print("Cumulative Explained Variance:")
+print(cumulative_explained_variance)
+
+singular_values = np.sqrt(pca.components_.var(axis=0))  # Assuming np is your NumPy import
+print("Singular Values (approximation):")
+print(singular_values)
+
+explained_variance = pca.explained_variance_ratio_
+
+
+print("Explained Variance Ratio:")
+for i, ratio in enumerate(explained_variance):
+    print(f"  Component {i+1}: {ratio:.4f}")
+
+
+cumulative_explained_variance = pca.explained_variance_ratio_.cumsum()
+print("\nCumulative Explained Variance:")
+for i, ratio in enumerate(cumulative_explained_variance):
+    print(f"  Component {i+1}: {ratio:.4f}")
+
+
+singular_values = np.sqrt(pca.components_.var(axis=0))
+print("\nSingular Values (approximation):")
+print(singular_values)
+
+
+components = pca.components_
+
+
+if pca.n_components_ != mc_x.shape[1]:
+    print("\nComponents (limited to calculated components):")
+    for i in range(pca.n_components_):
+        print(f"  Component {i+1}")
+        print(components[i])
+else:
+    print("\nComponents (all components calculated):")
+    print(pd.DataFrame(components, columns=mc_x.columns))
+
+std_mc = mc_x.iloc[:,:11].std(axis=0)
+std_mc = np.around(std_mc,decimals=1)
+print(std_mc)
+
+from sklearn.decomposition import PCA
+
+
+
+pca = PCA()
+MD_pca = pca.fit(mc_x)
+
+
+explained_variance = pca.explained_variance_ratio_
+cumulative_variance = np.cumsum(explained_variance)
+
+print("Importance of components:")
+print("Component\tExplained Variance\tCumulative Variance")
+for i, (ev, cv) in enumerate(zip(explained_variance, cumulative_variance)):
+    print(f"{i+1}\t\t{ev:.4f}\t\t\t{cv:.4f}")
+mc_pca = pca.fit_transform(mc_x)
+
+plt.scatter(mc_pca[:, 0], mc_pca[:, 1], color='grey')
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+plt.title('PCA Projection')
+plt.show()
+
+
+def plot_pca_axes(pca, components, ax):
+    for i, (comp, var) in enumerate(zip(pca.components_, pca.explained_variance_)):
+        comp = comp * np.sqrt(var)  # Scale component by the square root of variance
+        ax.arrow(0, 0, comp[0], comp[1], color='r', width=0.01)
+        ax.text(comp[0] * 1.15, comp[1] * 1.15, f"PC{i+1}", color='r', ha='center', va='center')
+
+fig, ax = plt.subplots()
+ax.scatter(mc_pca[:, 0], mc_pca[:, 1], color='grey')
+plot_pca_axes(pca, mc_pca, ax)
+ax.set_xlabel('Principal Component 1')
+ax.set_ylabel('Principal Component 2')
+ax.set_title('PCA Projection with Axes')
+plt.show()
+
+from sklearn.cluster import KMeans
+from sklearn.metrics import silhouette_score
+np.random.seed(1234)
+
+cluster_range = range(2, 9)
+inertia = []
+silhouette = []
+
+for k in cluster_range:
+    kmeans = KMeans(n_clusters=k, n_init=10, random_state=1234)
+    kmeans.fit(mc_x)
+    inertia.append(kmeans.inertia_)
+    silhouette.append(silhouette_score(mc_x, kmeans.labels_))
+
+# Plot the results
+fig, ax1 = plt.subplots()
+
+ax1.set_xlabel('Number of segments')
+ax1.set_ylabel('Inertia', color='tab:blue')
+ax1.plot(cluster_range, inertia, 'o-', color='tab:blue', label='Inertia')
+ax1.tick_params(axis='y', labelcolor='tab:blue')
+
+ax2 = ax1.twinx()
+ax2.set_ylabel('Silhouette Score', color='tab:orange')
+ax2.plot(cluster_range, silhouette, 's-', color='tab:orange', label='Silhouette Score')
+ax2.tick_params(axis='y', labelcolor='tab:orange')
+
+fig.tight_layout()
+plt.title('KMeans Clustering')
+plt.show()
+
+from sklearn.utils import resample
+from sklearn.metrics import adjusted_rand_score
+from scipy.stats import mode
+np.random.seed(1234)
+
+
+# Perform KMeans clustering with bootstrapping
+def boot_kmeans(data, k_range, n_init=10, n_boot=100):
+    boot_results = {}
+    n_samples = data.shape[0]
+    for k in k_range:
+        ari_scores = []
+        for _ in range(n_boot):
+            # Bootstrap sample
+            indices = np.random.choice(n_samples, n_samples, replace=True)
+            data_boot = data[indices]
+
+            # Fit KMeans on bootstrapped data
+            kmeans_boot = KMeans(n_clusters=k, n_init=n_init, random_state=1234)
+            kmeans_boot.fit(data_boot)
+            labels_boot = kmeans_boot.labels_
+
+            # Fit KMeans on original data
+            kmeans_original = KMeans(n_clusters=k, n_init=n_init, random_state=1234)
+            kmeans_original.fit(data)
+            labels_original = kmeans_original.labels_
+
+            # Calculate adjusted Rand index
+            ari = adjusted_rand_score(labels_original[indices], labels_boot)
+            ari_scores.append(ari)
+        boot_results[k] = ari_scores
+    return boot_results
+
+k_range = range(2, 9)  # Clustering from 2 to 8 clusters
+mc_b28 = boot_kmeans(mc_x, k_range, n_init=10, n_boot=100)
+
+ari_means = {k: np.mean(mc_b28[k]) for k in k_range}
+ari_stds = {k: np.std(mc_b28[k]) for k in k_range}
+
+plt.figure(figsize=(8, 5))
+plt.errorbar(k_range, [ari_means[k] for k in k_range], yerr=[ari_stds[k] for k in k_range], fmt='o')
+plt.xlabel('Number of segments')
+plt.ylabel('Adjusted Rand index')
+plt.title('Bootstrapped KMeans Clustering')
+plt.grid(True)
+plt.show()
+np.random.seed(1234)
+
+
+kmeans = KMeans(n_clusters=4, n_init=10, random_state=1234)
+kmeans.fit(mc_x)
+labels = kmeans.labels_
+
+plt.figure(figsize=(8, 5))
+sns.histplot(labels, bins=np.arange(-0.5, 4, 1), kde=False)
+plt.xlim(0, 4)
+plt.xlabel('Cluster')
+plt.ylabel('Frequency')
+plt.title('Histogram of Cluster Assignments')
+plt.xticks(range(4))
+plt.grid(True)
+plt.show()
+
+def step_kmeans(data, k_range, n_init=10):
+    models = {}
+    for k in k_range:
+        kmeans = KMeans(n_clusters=k, n_init=n_init, random_state=1234)
+        kmeans.fit(data)
+        models[k] = kmeans
+    return models
+
+k_range = range(2, 9)  # Clustering from 2 to 8 clusters
+mc_km28 = step_kmeans(mc_x, k_range, n_init=10)
+
+
+mc_k4 = mc_km28[4]
+
+
+labels = mc_k4.labels_
+
+plt.figure(figsize=(8, 5))
+sns.histplot(labels, bins=np.arange(-0.5, 5, 1), kde=False)
+plt.xlim(-0.5, 3.5)  # Since we have 4 clusters (0 to 3)
+plt.xlabel('Cluster')
+plt.ylabel('Frequency')
+plt.title('Histogram of Cluster Assignments for 4 Clusters')
+plt.xticks(range(4))
+plt.grid(True)
+plt.show()
+
+from sklearn.cluster import AgglomerativeClustering
+from sklearn.metrics import silhouette_samples
+
+
+def slsw_flexclust(data, kmeans_model):
+    labels = kmeans_model.labels_
+    cluster_numbers = np.unique(labels)
+    silhouette_values = silhouette_samples(data, labels)
+    cluster_silhouette_values = [silhouette_values[labels == i] for i in cluster_numbers]
+    return cluster_silhouette_values
+
+cluster_silhouette_values = slsw_flexclust(mc_x, mc_k4)
+
+plt.figure(figsize=(12, 6))
+plt.boxplot(cluster_silhouette_values, vert=False, labels=np.unique(mc_k4.labels_))
+plt.axvline(x=0, color='red', linestyle='--')
+plt.xlabel('Silhouette coefficient values')
+plt.ylabel('Cluster label')
+plt.title('Silhouette Plot for Hierarchical Clustering')
+plt.show()
+
+from sklearn.mixture import GaussianMixture
+np.random.seed(1234)
+
+k_range = range(2, 9)  # Clustering from 2 to 8 clusters
+models = []
+for k in k_range:
+    gmm = GaussianMixture(n_components=k, random_state=1234)
+    gmm.fit(mc_x)
+    models.append(gmm)
+
+# View the clustering results
+for k, model in zip(k_range, models):
+    print(f"Number of clusters: {k}")
+    print(model)
+np.random.seed(1234)
+
+k_range = range(2, 9)  # Clustering from 2 to 8 clusters
+models = []
+for k in k_range:
+    gmm = GaussianMixture(n_components=k, random_state=1234)
+    gmm.fit(mc_x)
+    models.append(gmm)
+
+# Plotting the information criteria
+plt.figure(figsize=(10, 6))
+plt.plot(k_range, [model.aic(mc_x) for model in models], label='AIC')
+plt.plot(k_range, [model.bic(mc_x) for model in models], label='BIC')
+plt.plot(k_range, [model.lower_bound_ for model in models], label='ICL')
+plt.xlabel('Number of clusters')
+plt.ylabel('Value of Information Criteria')
+plt.title('Information Criteria for Model-Based Clustering')
+plt.legend()
+plt.grid(True)
+plt.show()
+
+kmeans = KMeans(n_clusters=4, random_state=1234)
+kmeans.fit(mc_x)
+
+gmm = GaussianMixture(n_components=4, random_state=1234)
+gmm.fit(mc_x)
+
+kmeans_clusters = kmeans.labels_
+gmm_clusters = gmm.predict(mc_x)
+
+
+contingency_table = pd.crosstab(index=kmeans_clusters, columns=gmm_clusters, rownames=['KMeans'], colnames=['GMM'])
+
+print(contingency_table)
+
+kmeans = KMeans(n_clusters=4, random_state=1234)
+kmeans.fit(mc_x)
+
+
+kmeans_clusters = kmeans.labels_
+
+
+gmm = GaussianMixture(n_components=4, random_state=1234)
+gmm.fit(mc_x)
+
+gmm_clusters = gmm.predict(mc_x)
+
+contingency_table = pd.crosstab(index=kmeans_clusters, columns=gmm_clusters, rownames=['KMeans'], colnames=['GMM'])
+
+print(contingency_table)
+
+
+kmeans = KMeans(n_clusters=4, random_state=1234)
+kmeans.fit(mc_x)
+
+
+gmm = GaussianMixture(n_components=4, random_state=1234)
+gmm.fit(mc_x)
+
+
+log_likelihood_gmm = gmm.score(mc_x)
+log_likelihood_kmeans = kmeans.score(mc_x)
+
+print(f"Log Likelihood for Gaussian Mixture Model: {log_likelihood_gmm}")
+print(f"Log Likelihood for KMeans Model: {log_likelihood_kmeans}")
+
+
+freq_table = mc['Like'].value_counts()
+reversed_freq_table = freq_table[::-1]
+
+print(reversed_freq_table)
+
+data = {'Like': ['I love it!+5', 'It is ok+3', 'Dislike-2', 'Like+4']}
+mc = pd.DataFrame(data)
+
+def extract_numeric_value(like_str):
+    import re
+    match = re.search(r'[-+]?\d+', like_str)
+    return int(match.group()) if match else np.nan
+
+mc['Like'] = mc['Like'].apply(extract_numeric_value)
+
+mc = mc.dropna(subset=['Like'])
+
+
+like_counts = mc['Like'].value_counts()
+reversed_like_counts = like_counts.iloc[::-1]
+print(reversed_like_counts)
+
+mc['Like.n'] = 6 - mc['Like'].astype(int)
+
+like_n_counts = mc['Like.n'].value_counts()
+print(like_n_counts)
+
+np.random.seed(1234)
+
+\
+
+# Function to perform KMeans clustering on a bootstrap sample
+def bootstrap_kmeans(X, n_clusters, n_init=10, random_state=None):
+    X_resampled = resample(X, random_state=random_state)
+    kmeans = KMeans(n_clusters=n_clusters, n_init=n_init, random_state=random_state)
+    kmeans.fit(X_resampled)
+    return kmeans.labels_
+
+# Perform bootstrapped KMeans clustering for a range of cluster numbers
+cluster_range = range(2, 9)
+n_rep = 10
+n_boot = 100
+results = {k: [] for k in cluster_range}
+
+# Run bootstrap sampling with KMeans in parallel
+for k in cluster_range:
+    boot_results = Parallel(n_jobs=-1)(delayed(bootstrap_kmeans)(mc_x, k, n_init=n_rep, random_state=1234+i) for i in range(n_boot))
+    results[k] = boot_results
+
+# Calculate the adjusted Rand index for the bootstrapped clustering results
+def calculate_ari(boot_labels, original_labels):
+    return adjusted_rand_score(original_labels, boot_labels)
+
+aris = {k: [] for k in cluster_range}
+
+for k in cluster_range:
+    kmeans = KMeans(n_clusters=k, n_init=n_rep, random_state=1234)
+    kmeans.fit(mc_x)
+    original_labels = kmeans.labels_
+    for boot_labels in results[k]:
+        ari = calculate_ari(boot_labels, original_labels)
+        aris[k].append(ari)
+
+# Calculate mean ARI for each number of clusters
+mean_ari = {k: np.mean(aris[k]) for k in cluster_range}
+std_ari = {k: np.std(aris[k]) for k in cluster_range}
+
+# Plot the results
+plt.errorbar(list(mean_ari.keys()), list(mean_ari.values()), yerr=list(std_ari.values()), fmt='o-', capsize=5)
+plt.xlabel('Number of segments')
+plt.ylabel('Adjusted Rand Index')
+plt.title('Adjusted Rand Index for Bootstrapped KMeans Clustering')
+plt.show()
+
+np.random.seed(1234)
+
+\
+
+# Function to perform KMeans clustering on a bootstrap sample
+def bootstrap_kmeans(X, n_clusters, n_init=10, random_state=None):
+    X_resampled = resample(X, random_state=random_state)
+    kmeans = KMeans(n_clusters=n_clusters, n_init=n_init, random_state=random_state)
+    kmeans.fit(X_resampled)
+    return kmeans.labels_
+
+# Perform bootstrapped KMeans clustering for a range of cluster numbers
+cluster_range = range(2, 9)
+n_rep = 10
+n_boot = 100
+results = {k: [] for k in cluster_range}
+
+# Run bootstrap sampling with KMeans in parallel
+for k in cluster_range:
+    boot_results = Parallel(n_jobs=-1)(delayed(bootstrap_kmeans)(mc_x, k, n_init=n_rep, random_state=1234+i) for i in range(n_boot))
+    results[k] = boot_results
+
+# Calculate the adjusted Rand index for the bootstrapped clustering results
+def calculate_ari(boot_labels, original_labels):
+    return adjusted_rand_score(original_labels, boot_labels)
+
+aris = {k: [] for k in cluster_range}
+
+for k in cluster_range:
+    kmeans = KMeans(n_clusters=k, n_init=n_rep, random_state=1234)
+    kmeans.fit(mc_x)
+    original_labels = kmeans.labels_
+    for boot_labels in results[k]:
+        ari = calculate_ari(boot_labels, original_labels)
+        aris[k].append(ari)
+
+# Calculate mean ARI for each number of clusters
+mean_ari = {k: np.mean(aris[k]) for k in cluster_range}
+std_ari = {k: np.std(aris[k]) for k in cluster_range}
+
+# Plot the results
+plt.errorbar(list(mean_ari.keys()), list(mean_ari.values()), yerr=list(std_ari.values()), fmt='o-', capsize=5)
+plt.xlabel('Number of segments')
+plt.ylabel('Adjusted Rand Index')
+plt.title('Adjusted Rand Index for Bootstrapped KMeans Clustering')
+plt.show()
+
+cluster_range = range(2, 9)
+n_init = 10
+results = {}
+
+for n_clusters in cluster_range:
+    kmeans = KMeans(n_clusters=n_clusters, n_init=n_init, random_state=1234)
+    kmeans.fit(mc_x)
+    results[n_clusters] = kmeans.labels_
+
+# For the purpose of the example, we will use 4 clusters
+n_clusters = 4
+kmeans = KMeans(n_clusters=n_clusters, n_init=n_init, random_state=1234)
+kmeans.fit(mc_x)
+cluster_labels = kmeans.labels_
+
+# Calculate silhouette scores for each sample
+silhouette_vals = silhouette_samples(mc_x, cluster_labels)
+
+# Calculate average silhouette scores for each cluster
+stability_scores = []
+for i in range(n_clusters):
+    cluster_silhouette_vals = silhouette_vals[cluster_labels == i]
+    stability_scores.append(np.mean(cluster_silhouette_vals))
+
+# Plot the segment stability
+plt.bar(range(1, n_clusters + 1), stability_scores, color='blue', alpha=0.7)
+plt.ylim(0, 1)
+plt.xlabel('Segment number')
+plt.ylabel('Segment stability')
+plt.title('Segment Stability (Silhouette Scores)')
+plt.show()
+
+from scipy.cluster.hierarchy import linkage, dendrogram
+
+Z = linkage(mc_x.T, 'ward')
+
+# Plot the dendrogram
+plt.figure(figsize=(10, 5))
+dendrogram(Z)
+plt.show()
+
+pca = PCA(n_components=2)
+mc_pca = pca.fit_transform(mc_x)
+
+# Create the scatter plot
+plt.figure(figsize=(8, 6))
+plt.scatter(mc_pca[:, 0], mc_pca[:, 1])
+
+# Add convex hulls and similarity lines if desired
+# Add code here for convex hulls and similarity lines
+
+plt.xlabel('Principal Component 1')
+plt.ylabel('Principal Component 2')
+plt.title('Data Projected onto First Two Principal Components')
+plt.show()
